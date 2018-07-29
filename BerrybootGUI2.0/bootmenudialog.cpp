@@ -33,6 +33,10 @@
 #include "mainwindow.h"
 
 #include <iostream>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/reboot.h>
@@ -263,6 +267,79 @@ void BootMenuDialog::initialize()
     }
     setEnabled(true);
     ui->list->setFocus();
+
+    // TODO: Check config file if switch override is enabled
+    switchOverride();
+}
+
+void BootMenuDialog::switchOverride()
+{
+  /*
+   * The first low gpio pin gives the image to boot
+   */
+  // TODO: Search config file for ordered list of gpio pins
+  // NOTE: These are the working gpio pins that I have tested
+  int gpio_pin_numbers[] = {4, 5, 6};
+  int num_image_choices = std::min(9, ui->list->count());
+
+  if (num_image_choices <= 0)
+  {
+    std::cerr << "Non-positive number of image choices" << std::endl;
+    return;
+  }
+
+  for (int i = 0; i < num_image_choices; i++)
+  {
+    std::ofstream gpio_export_file("/sys/class/gpio/export");
+    if (!gpio_export_file.is_open())
+    {
+      std::cerr << "ERROR: Could not open /sys/class/gpio/export" << std::endl;
+      return;
+    }
+    gpio_export_file << gpio_pin_numbers[i] << std::endl;
+    gpio_export_file.close();
+
+    std::stringstream gpio_pin_dir;
+    gpio_pin_dir << "/sys/class/gpio/gpio" << gpio_pin_numbers[i];
+
+    std::stringstream gpio_direction_filename;
+    gpio_direction_filename << gpio_pin_dir.str() << "/direction";
+    std::ofstream gpio_direction_file(gpio_direction_filename.str().c_str());
+    if (!gpio_direction_file.is_open())
+    {
+      std::cerr << "ERROR: Could not open " << gpio_direction_filename.str() << std::endl;
+      return;
+    }
+    gpio_direction_file << "in" << std::endl;
+    gpio_direction_file.close();
+
+    int gpio_value;
+    std::stringstream gpio_value_filename;
+    gpio_value_filename << gpio_pin_dir.str() << "/value";
+    std::ifstream gpio_value_file(gpio_value_filename.str().c_str());
+    if (!gpio_value_file.is_open())
+    {
+      std::cerr << "ERROR: Could not open " << gpio_value_filename.str() << std::endl;
+      return;
+    }
+    gpio_value_file >> gpio_value;
+    gpio_value_file.close();
+
+    std::ofstream gpio_unexport_file("/sys/class/gpio/unexport");
+    if (!gpio_unexport_file.is_open())
+    {
+      std::cerr << "ERROR: Could not open /sys/class/gpio/unexport" << std::endl;
+      return;
+    }
+    gpio_unexport_file << gpio_pin_numbers[i] << std::endl;
+    gpio_unexport_file.close();
+
+    if (gpio_value == 0)
+    {
+      bootImage(ui->list->item(i)->data(Qt::UserRole).toString());
+    }
+  }
+  std::cerr << "No low gpio pins found. Aborting manual switch overrride" << std::endl;
 }
 
 void BootMenuDialog::on_bootButton_clicked()

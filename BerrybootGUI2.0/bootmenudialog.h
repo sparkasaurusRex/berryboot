@@ -40,7 +40,7 @@ class Installer;
 class BootMenuDialog : public QDialog
 {
     Q_OBJECT
-    
+
 public:
     explicit BootMenuDialog(Installer *i, QWidget *parent = 0);
     ~BootMenuDialog();
@@ -53,6 +53,10 @@ protected:
      * Boot file system image specified by name
      */
     void bootImage(const QString &name);
+    /*
+     * Boot the file system image specified by the first low gpio pin
+     */
+    void switchOverride();
     /*
      * Start the installer
      */
